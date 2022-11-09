@@ -1,0 +1,187 @@
+import dollar as dollar
+import betano as betano
+import pandas as pd
+import win32com.client
+import requests
+import unidecode
+import base64
+
+#Dados telegram
+TOKEN = "5620155598:AAECYDQbpOLE9rcgVFUZ3ZoUkcNjnYSXQ_w"
+chat_id = "-1001845830961"
+
+
+mensage = ''
+mensage = f"Comecei a executar novamente"
+url = f" https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={mensage}&parse_mode=Markdown"
+#requests.get(url)
+
+
+"""
+saldo_dollar = dollar.Dollar().getSaldo()
+saldo_betano = betano.Betano().getSaldo()
+#print('Saldo Dollar: '+str(saldo_dollar))
+#print('Saldo Betamp: '+str(saldo_betano))
+casa_menor_saldo = ''
+menor_saldo = 0
+
+if(saldo_betano<=saldo_dollar):
+    casa_menor_saldo = 'betano'
+    menor_saldo = saldo_betano
+else:
+    casa_menor_saldo = 'dollar'
+    menor_saldo = saldo_dollar
+
+"""
+
+cotacoes_betano = betano.Betano().getCotacoes()
+pd_cotacoes_betano = pd.json_normalize(cotacoes_betano)
+pd_cotacoes_betano = pd_cotacoes_betano.drop_duplicates(subset=['chave_jogo'])
+
+cotacoes_dollar = dollar.Dollar().getCotacoes()
+pd_cotacoes_dollar = pd.json_normalize(cotacoes_dollar)
+
+print("Nomalizando nomes Dollar")
+pd_normalize_teams = pd.read_excel(r'C:\Users\ran_l\OneDrive\Pessoal\Pense e Enriqueça\Cotações\Nomalize.xlsm', sheet_name='Dollar')
+
+
+for index_cotacoes, row_cotacoes in pd_cotacoes_dollar.iterrows():
+    altera_home = ''
+    altera_away = ''
+    for index_normalize, row_normalize in pd_normalize_teams.iterrows():
+        if row_cotacoes['home_team'] == row_normalize['Dollar'] and row_normalize['Betano'] != '':
+            pd_cotacoes_dollar.iloc[index_cotacoes, pd_cotacoes_dollar.columns.get_loc('home_team')] = row_normalize['Betano']
+            altera_home = row_normalize['Betano']
+        if row_cotacoes['away_team'] == row_normalize['Dollar'] and row_normalize['Betano'] != '':
+            pd_cotacoes_dollar.iloc[index_cotacoes, pd_cotacoes_dollar.columns.get_loc('away_team')] = row_normalize['Betano']
+            altera_away = row_normalize['Betano']
+        pd_cotacoes_dollar.iloc[index_cotacoes, pd_cotacoes_dollar.columns.get_loc('chave_jogo')] = (unidecode.unidecode(
+            (altera_home if altera_home != '' else row_cotacoes['home_team'])[:10] + '_X_' +
+            (altera_away if altera_away != '' else row_cotacoes['away_team'])[:10])).replace(' ', '').replace(
+                                    '-', '').replace('.', '') + '#' + row_cotacoes['chave_jogo'].split('#')[1]
+
+m = pd.merge(pd_cotacoes_betano, pd_cotacoes_dollar, how='inner', on='chave_jogo')
+
+#m['odds_goals_under'] = 2.5
+range_over = 1/m['odds_betano']
+range_under = 1/m['odds_dollar']
+m['aposta_betano'] = (range_over/(range_over + range_under))*100
+m['aposta_dollar'] = (range_under/(range_over + range_under))*100
+m['retorno_percentual'] = (m['aposta_betano']*m['odds_betano'])-100
+m_tomail = m[['home_team_x', 'away_team_x', 'chave_jogo', 'start_date', 'tipo_betano', 'odds_betano', 'odds_dollar', 'aposta_betano', 'aposta_dollar', 'retorno_percentual']]
+filter_positive = m_tomail[(m_tomail['retorno_percentual'] > 0)]
+m_tomail = m_tomail.sort_values(by=['retorno_percentual'], ascending=False)
+
+
+print("Enviando e-mail")
+outlook = win32com.client.Dispatch('outlook.application')
+mail = outlook.CreateItem(0)
+
+mail.To = 'releandro15@gmail.com'
+mail.Subject = 'Cotações Teste'
+mail.HTMLBody = '<h3>Segue as cotações com retornos</h3>'+m_tomail.to_html()+'<br/><p>Segue as cotações da betano</p>'+pd_cotacoes_betano.to_html()+'<br/><p>Segue as cotações da dollar</p>'+pd_cotacoes_dollar.to_html()
+mail.CC = 'ga.leandro.ma@gmail.com'
+mail.Send()
+
+
+
+mensage = f"Terminei a execução, se deu algum positivo vc vai receber abaixo"
+url = f" https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={mensage}&parse_mode=Markdown"
+#requests.get(url)
+
+print("Enviando Telegram")
+if (len(filter_positive.index)>0):
+    filter_positive.to_excel("cotacoes_retorno.xlsx")
+    for index, row in filter_positive.iterrows():
+        mensage = ''
+        url = ''
+        chave_msg = f"{row['chave_jogo']}|{row['start_date']}|{round(row['retorno_percentual'], 2)};\n"
+        f = open("jogos.txt", "r")
+        if chave_msg in f.read():
+            mensage = f"{mensage}*{row['home_team_x']} x {row['away_team_x']}* \n"
+            mensage = f"{mensage}{row['start_date']}\n\n"
+            mensage = f"{mensage}*Jogo já enviado*"
+            url = f" https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={mensage}&parse_mode=Markdown"
+            #requests.get(url)
+        else:
+            mensage = '🔥 *ACHEI UMA APOSTA* 🔥\n\n'
+            mensage = f"{mensage}*{row['home_team_x']} x {row['away_team_x']}* \n"
+            mensage = f"{mensage}{row['start_date']}\n\n"
+            mensage = f"{mensage}*Mercado: *{row['tipo_betano'].replace('Sim', '')}\n\n"
+            mensage = f"{mensage}*Odds Betano: *{round(row['odds_betano'], 2)}\n"
+            mensage = f"{mensage}*Odds Dollar: *{round(row['odds_dollar'], 2)}\n\n"
+            mensage = f"{mensage}*Aposta Betano: *{round(row['aposta_betano'], 2)}\n"
+            mensage = f"{mensage}*Aposta Dollar: *{round(row['aposta_dollar'], 2)}\n\n"
+            mensage = f"{mensage}*🤑 Retorno: *{round(row['retorno_percentual'], 2)}\n"
+            url = f" https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={mensage}&parse_mode=Markdown"
+            requests.get(url)
+            f = open("jogos.txt", "a")
+            f.write(chave_msg)
+            f.close()
+
+
+        """
+        message_bytes = mensage.encode('ascii')
+        base64_bytes = base64.b64encode(message_bytes)
+        base64_message = base64_bytes.decode('ascii')
+        print(base64_message)
+        """
+else:
+    mensage = "😞 Triste! \n" \
+              "Garimpei tudo, mas não achei nenhum jogo com retorno positivo.\n" \
+              "Enviei no e-mail tudo o que achei, dê um confere lá.\n" \
+              "Daqui 30 minutos tento novamente. Até mais! 👋"
+
+
+pd_times_betano = pd.read_excel('betano.xlsx', sheet_name='Sheet1')
+times_casa_betano = pd_cotacoes_betano.rename(columns={'home_team': 'betano'})['betano']
+times_fora_betano = pd_cotacoes_betano.rename(columns={'away_team': 'betano'})['betano']
+
+pd_times_betano = pd.concat([times_casa_betano, times_fora_betano], ignore_index=False)
+pd_times_betano = pd_times_betano.drop_duplicates()
+pd_times_betano.to_excel("betano.xlsx", index=False)
+
+pd_times_dollar = pd.read_excel('dollar.xlsx', sheet_name='Sheet1')
+times_casa_dollar = pd_cotacoes_dollar.rename(columns={'home_team': 'dollar'})['dollar']
+times_fora_dollar = pd_cotacoes_dollar.rename(columns={'away_team': 'dollar'})['dollar']
+
+pd_times_dollar = pd.concat([times_casa_dollar, times_fora_dollar], ignore_index=False)
+pd_times_dollar = pd_times_dollar.drop_duplicates()
+pd_times_dollar.to_excel("dollar.xlsx", index=False)
+
+"""
+print("Calculando aposta")
+if(m_tomail.iloc[0]['retorno_percentual'] > 0):
+    mensagem = "*Atenção*\n Outro encontrado! Olhe no e-mail"
+    url = f" https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={mensagem}&parse_mode=Markdown"
+    requests.get(url)
+
+    if(casa_menor_saldo=='dollar'):
+        aposta_dollar = menor_saldo
+        aposta_betano = (menor_saldo * m_tomail.iloc[0]['aposta_betano'])/m_tomail.iloc[0]['aposta_dollar']
+    else:
+        aposta_betano = menor_saldo
+        aposta_dollar = (menor_saldo * m_tomail.iloc[0]['aposta_dollar'])/m_tomail.iloc[0]['aposta_betano']
+
+    print('Valor aposta Dollar: '+str(aposta_dollar))
+    print('Valor aposta Betano: '+str(aposta_betano))
+
+    outlook = win32com.client.Dispatch('outlook.application')
+    mail = outlook.CreateItem(0)
+
+    mail.To = 'releandro15@gmail.com'
+    mail.Subject = 'Apostar agora'
+    mail.HTMLBody = '<h3>Aposta Betano</h3>' + str(round(aposta_betano, 2)) + '<h3>Aposta Dollar</h3>' + str(round(aposta_dollar, 2)) + '<br/><h3>Segue detalhes da aposta</h3>' + pd.DataFrame(m_tomail.iloc[0]).to_html()
+    #mail.CC = 'ga.leandro.ma@gmail.com'
+    mail.Send()
+"""
+
+
+
+
+#m.to_excel("output.xlsx")
+
+
+
+
+
