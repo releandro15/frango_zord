@@ -1,1 +1,1 @@
-worker: python main.pyp
+worker: python frangozord/main.pyp
