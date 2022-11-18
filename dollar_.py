@@ -86,6 +86,10 @@ class Dollar:
 
         return jogos
 
+    def getDemaisMercados(cotacoes_dollar):
+        cotacoes_betano = pd.json_normalize(cotacoes_betano).dropna()
+        cotacoes_betano = cotacoes_betano.drop_duplicates(subset=['url_betano'])
+
     def getSaldo(self):
         print('Iniciando captura do saldo da Dollar Bet')
         service = Service(ChromeDriverManager().install())

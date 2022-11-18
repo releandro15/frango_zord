@@ -1,6 +1,6 @@
-import http.client
-import json
-import math
+import asyncio
+import aiohttp
+import requests
 import unidecode
 import datetime
 from selenium import webdriver
@@ -8,9 +8,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 import time
+import pandas as pd
 
 class Betano:
-
 
     @classmethod
     def getCotacoes(cls):
@@ -142,6 +142,86 @@ class Betano:
 
         return jogos
 
+    async def getDados(self, session, url):
+        try:
+            async with session.get(url) as resp:
+                data = await resp.json()
+                print(data['data']['event']['name'])
+                return (data['data']['event'])
+        except:
+            print('Erro Betano')
+
+    def getDemaisMercados(self, cotacoes_betano):
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
+        }
+        cotacoes_betano = pd.json_normalize(cotacoes_betano).dropna()
+        cotacoes_betano = cotacoes_betano.drop_duplicates(subset=['url_betano'])
+        newData = ''
+        jogos = []
+
+        for index, jogo in cotacoes_betano.iterrows():
+            print('Betano: '+jogo['home_team'])
+            #print(jogo['url_betano'])
+            res = requests.get('https://br.betano.com/api' + jogo['url_betano'],
+                               headers=headers)
+            data = res.json()
+            markets = data['data']['event']['markets']
+            for market in markets:
+                if market['name'] == 'Total de gols Mais/Menos - 1° Tempo':
+                    for selection in market['selections']:
+                        if selection['name'] == 'Mais de 1.5':
+                            newData = {
+                                "id": jogo['id'],
+                                "home_team": jogo['home_team'],
+                                "away_team": jogo['away_team'],
+                                "chave_jogo": jogo['chave_jogo'].split('#')[0]+"#1.5_1T",
+                                "start_time": jogo['start_time'],
+                                "tipo_betano": "+1.5 1T",
+                                "odds_betano": selection['price'],
+                                "url_betano": jogo['url_betano']
+                            }
+                            jogos.append(newData)
+        return jogos
+
+    async def getDemaisMercadoos(self, cotacoes_betano):
+        cotacoes_betano = pd.json_normalize(cotacoes_betano).drop_duplicates(subset=['url_betano']).dropna()
+        cotacoes_betano['url_betano'] = 'https://br.betano.com/api' + cotacoes_betano['url_betano']
+        list_cotacoes_betano = cotacoes_betano['url_betano'].tolist()
+        jogos = []
+
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for number in list_cotacoes_betano:
+                url = number
+                tasks.append(asyncio.ensure_future(self.getDados(session, url)))
+
+            data = await asyncio.gather(*tasks)
+
+        #markets = data['markets']
+        for item in data:
+            if item:
+                for market in item['markets']:
+                    if market['name'] == 'Total de gols Mais/Menos - 1° Tempo':
+                        for selection in market['selections']:
+                            if selection['name'] == 'Mais de 1.5':
+                                newData = {
+                                    "id": item['id'],
+                                    "home_team": item['participants'][0]['name'],
+                                    "away_team": item['participants'][1]['name'],
+                                    "chave_jogo": (unidecode.unidecode(
+                                        item['participants'][0]['name'][:10] + '_X_' + item['participants'][1]['name'][
+                                                                                       :10])).replace(' ', '').replace('-', '').replace('.', '') + '#2.5',
+                                    "start_time": datetime.datetime.fromtimestamp(int(str(item['startTime'])[:-3])).strftime('%d/%m/%Y %H:%M'),
+                                    "tipo_betano": "+1.5 1T",
+                                    "odds_betano": selection['price'],
+                                    "url_betano": item['url']
+                                }
+                                jogos.append(newData)
+
+        return jogos
+
 
     def getSaldo(self):
         service = Service(ChromeDriverManager().install())
@@ -187,7 +267,7 @@ class Betano:
         element = navegador.find_element(By.XPATH,
                                          '//*[@id="right-sidebar"]/div[2]/div/div[2]/section/div/div/div/div/div/div/div[2]/input')
         navegador.execute_script("arguments[0].value = 50;", element)
-"""
+        """
         element = navegador.find_element(By.XPATH, '//*[@id="right-sidebar"]/div[2]/div/div[2]/section/div/div/div/div/div/div/div[2]/input')
         navegador.execute_script("arguments[0].dispatchEvent(evt);", element)
 
@@ -195,16 +275,17 @@ class Betano:
         element = navegador.find_element(By.XPATH,
                                          '//*[@id="right-sidebar"]/div[2]/div/div[2]/section/div/div/div/div/div/div/div[1]/div/div[1]/div[1]/a')
         navegador.execute_script("arguments[0].click();", element)
-"""
+        """
         #navegador.find_element(By.XPATH, '/html/body/div[1]/div/section[2]/div[5]/div[2]/section/div/div[4]/div/div[2]/div[2]/button[1]').click()
 
         #time.sleep(10000)
 
 
 
+
 """
 dol = Betano()
-#dol.getCotacoes()
+dol.getCotacoes()
 
 with open('data.json', 'w') as f:
     json.dump(dol.getCotacoes(), f)
