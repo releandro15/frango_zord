@@ -13,4 +13,4 @@ for index_dollar, row_dollar in pd_dollar.iterrows():
     for index_betano, row_betano in pd_betano.iterrows():
         res = similar(str(row_dollar['dollar']), str(row_betano['betano']))
         if res > 0.70:
-            print(f"Teste: {row_dollar['dollar']} # {row_betano['betano']} = {str(res)}")
+            print(f"{row_dollar['dollar']}|{row_betano['betano']}|{str(res)}")

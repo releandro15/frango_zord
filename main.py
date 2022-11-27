@@ -77,7 +77,7 @@ m['aposta_betano'] = (range_over/(range_over + range_under))*100
 m['aposta_dollar'] = (range_under/(range_over + range_under))*100
 m['retorno_percentual'] = (m['aposta_betano']*m['odds_betano'])-100
 m_tomail = m[['home_team_x', 'away_team_x', 'chave_jogo', 'start_date', 'tipo_betano', 'odds_betano', 'odds_dollar', 'aposta_betano', 'aposta_dollar', 'retorno_percentual']]
-filter_positive = m_tomail[(m_tomail['retorno_percentual'] > 0)]
+filter_positive = m_tomail[(m_tomail['retorno_percentual'] >= 1)]
 m_tomail = m_tomail.sort_values(by=['retorno_percentual'], ascending=False)
 
 
