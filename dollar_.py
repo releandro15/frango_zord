@@ -1,5 +1,9 @@
+import asyncio
 import http.client
 import json
+
+import aiohttp
+import requests
 import unidecode
 from selenium import webdriver
 from sockshandler import merge_dict
@@ -9,15 +13,14 @@ from selenium.webdriver.common.by import By
 import time
 from datetime import datetime, timedelta
 from collections import defaultdict
-
+import pandas as pd
 
 
 class Dollar:
 
     @classmethod
-    def getCotacoes(dia):
+    def getJogos(cls):
         jogos = []
-        odds_goals_under = 0
 
         conn = http.client.HTTPSConnection("slark.ngx.bet")
         payload = ''
@@ -33,89 +36,75 @@ class Dollar:
             data = res.read()
             data = json.loads(data.decode("utf-8"))
 
-            for d in data:
-                try:
-                    url = 'https://slark.ngx.bet/event/' + d['_id']
-                    conn.request("GET", url)
-                    res = conn.getresponse()
-                    data = res.read()
-                    data = json.loads(data.decode("utf-8"))
-                    all_odds = data['odds']['full_time']
-
-                    for odds in all_odds.keys():
-                        if odds == 'goals_over_under':
-                            arr = all_odds['goals_over_under']
-                            for element in arr:
-                                if element['name'] == "2.5" and element['header'] == 'UNDER':
-                                    odds_goals_under = element['value']
-                            jogo_goals_over_under = {
-                                "id": data['_id'],
-                                "home_team": data['home_team'],
-                                "away_team": data['away_team'],
-                                "chave_jogo": (
-                                    unidecode.unidecode(
-                                        data['home_team'][:10] + '_X_' + data['away_team'][:10])).replace(' ',
-                                                                                                          '').replace(
-                                    '-', '').replace('.', '') + '#2.5',
-                                "start_date": (datetime.strptime(data['date'], '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(
-                                    hours=-4)).strftime("%d/%m/%Y %H:%M"),
-                                "tipo_dollar": "Gols-2.5",
-                                "odds_dollar": odds_goals_under
-                            }
-                            jogos.append(jogo_goals_over_under)
-
-                        if odds == 'both_teams_to_score_no':
-                            jogo_both_teams_to_score_no = {
-                                "id": data['_id'],
-                                "home_team": data['home_team'],
-                                "away_team": data['away_team'],
-                                "chave_jogo": (
-                                    unidecode.unidecode(
-                                        data['home_team'][:10] + '_X_' + data['away_team'][:10])).replace(' ',
-                                                                                                          '').replace(
-                                    '-', '').replace('.', '') + '#ambas',
-                                "start_date": (datetime.strptime(data['date'], '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(
-                                    hours=-4)).strftime("%d/%m/%Y %H:%M"),
-                                "tipo_dollar": "Ambas Marcam Não",
-                                "odds_dollar": all_odds['both_teams_to_score_no']['value']
-                            }
-                            jogos.append(jogo_both_teams_to_score_no)
-                    print("#Dolar:  " + data['home_team'] + " x " + data['away_team'])
-                except:
-                    print("#Dolar: Erro")
+            for jogo in data:
+                jogos.append(jogo['_id'])
 
         return jogos
 
-    def getDemaisMercados(cotacoes_dollar):
-        cotacoes_betano = pd.json_normalize(cotacoes_betano).dropna()
-        cotacoes_betano = cotacoes_betano.drop_duplicates(subset=['url_betano'])
+    def montaJson(self, casa, fora, inicio, mercado, odds_dollar):
+        inicio = (datetime.strptime(inicio, '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(hours=-4)).strftime("%d/%m/%Y %H:%M")
+        return {
+            "casa": casa,
+            "fora": fora,
+            "chave": (unidecode.unidecode(casa+' x '+fora)),
+            "inicio": inicio,
+            "mercado": mercado,
+            "odds_dollar": odds_dollar
+        }
+    async def getDados(self, session, url):
+        headers = {
+            'Origin': 'https://www.dollar.bet'
+        }
+        try:
+            async with session.get(url, headers=headers) as resp:
+                data = await resp.json()
+                print(f"Dollar {data['home_team']} - {data['away_team']}")
+                return (data)
+        except:
+            print('Erro Dollar')
 
-    def getSaldo(self):
-        print('Iniciando captura do saldo da Dollar Bet')
-        service = Service(ChromeDriverManager().install())
-        navegador = webdriver.Chrome(service=service)
-        navegador.get("https://www.dollar.bet/home/events-area")
-        time.sleep(2)
-        navegador.find_element(By.XPATH, '//*[@id="menu-top"]/div[1]/div[4]/div/div/button/span').click()
-        time.sleep(2)
-        navegador.find_element(By.XPATH, '//*[@id="mat-input-0"]').send_keys("releandro15")
-        navegador.find_element(By.XPATH, '//*[@id="mat-input-1"]').send_keys("10202233+ac")
-        navegador.find_element(By.XPATH,
-                               '//*[@id="app-component-view"]/app-window-plus2/div/app-home-mobile-plus2/div/div/div/app-events-area-plus2/div/app-events-area-mobile-plus2/mat-drawer-container/mat-drawer[2]/div/app-menu-login-sidebar-mobile-plus2/div/div/div[1]/form/div[2]/button[2]').click()
-        time.sleep(2)
-        saldo_dollar = (navegador.find_element(By.XPATH,
-                                               '//*[@id="app-component-view"]/app-window-plus2/div/app-home-mobile-plus2/div/div/div/app-events-area-plus2/div/app-events-area-mobile-plus2/mat-drawer-container/mat-drawer[2]/div/app-menu-login-sidebar-mobile-plus2/div/div/div/div/div[1]/div[1]/span').text).replace(
-            'R$ ', '')
-        print('O saldo disponível na Dollar Bet é ' + saldo_dollar)
-        navegador.quit()
-        return float(saldo_dollar.replace('.', '').replace(',', '.'))
+    async def getCotacoes(self, jogos_dollar):
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for jogo in jogos_dollar:
+                url = 'https://slark.ngx.bet/event/' + jogo
+                tasks.append(asyncio.ensure_future(self.getDados(session, url)))
 
-"""
-dol = Dollar()
-dol.getCotacoes()
-# dol.apostar()
+            data = await asyncio.gather(*tasks)
+            return data
+
+    def filtraMercados(self, jogos_cotacoes):
+        jogos_filtrados = []
+        for jogo in jogos_cotacoes:
+            casa = jogo['home_team']
+            fora = jogo['away_team']
+            inicio = jogo['date']
+            for mercadox in jogo['odds']['full_time']['goals_over_under']:
+                mercado = 'Total Gols '+('Mais de ' if mercadox['header']=='UNDER' else 'Menos de ')+mercadox['name']
+                odds_dollar = mercadox['value']
+                jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+            for mercadox in jogo['odds']['first_time']['goals_over_under']:
+                mercado = 'Total Gols 1T '+('Mais de ' if mercadox['header']=='UNDER' else 'Menos de ')+mercadox['name']
+                odds_dollar = mercadox['value']
+                jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+
+            mercado = 'Ambas equipes Marcam Não'
+            odds_dollar = jogo['odds']['full_time']['both_teams_to_score_yes']['value']
+            jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+
+            mercado = 'Ambas equipes Marcam Sim'
+            odds_dollar = jogo['odds']['full_time']['both_teams_to_score_no']['value']
+            jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+
+
+        return jogos_filtrados
+
+
+"""dol = Dollar()
+cotacoes = asyncio.run(dol.getCotacoes(dol.getJogos()))
+filt = dol.filtraMercados(cotacoes)
 
 with open('data.json', 'w') as f:
-    json.dump(dol.getCotacoes(), f)
+    json.dump(filt, f)
 exit()
 """

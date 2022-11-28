@@ -1,28 +1,16 @@
-import http.client
-import json
-import math
-import unidecode
+import asyncio
 import datetime
-from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-import time
+
+import aiohttp
+import requests
+import unidecode
+from bs4 import BeautifulSoup
+import json
 
 class Betano:
-
     @classmethod
-    def getCotacoes(cls):
-        import requests
-        from bs4 import BeautifulSoup
-        import json
-        import unidecode
-
+    def getJogos(cls):
         jogos = []
-
-        def make_events_page(events):
-
-            return newData
 
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
@@ -37,26 +25,8 @@ class Betano:
         events_firstpage = first_page['data']['blocks'][0]['events']
         lastId = events_firstpage[len(events_firstpage) - 1]['id']
 
-        for event in events_firstpage:
-            newData = ''
-            for market in event['markets']:
-                if market['name'] == "Total de Gols Mais/Menos":
-                    for selection in market['selections']:
-                        if selection['name'] == 'Mais de 2.5':
-                            odds_goals_over = selection['price']
-                            newData = {
-                                "id": event['id'],
-                                "home_team": event['participants'][0]['name'],
-                                "away_team": event['participants'][1]['name'],
-                                "chave_jogo": (unidecode.unidecode(
-                                    event['participants'][0]['name'][:10] + '_X_' + event['participants'][1]['name'][
-                                                                                   :10])).replace(' ', '').replace('-', '').replace('.', ''),
-                                "start_time": datetime.datetime.fromtimestamp(int(str(event['startTime'])[:-3])).strftime('%d/%m/%Y %H:%M'),
-                                "odds_goals_over": odds_goals_over
-                            }
-                if newData != "":
-                    print("Betano:  " + newData['home_team'] + " x " + newData['away_team'])
-                    jogos.append(newData)
+        for event_firstpage in events_firstpage:
+            jogos.append(event_firstpage['url'])
 
         # Percorrendo demais páginas
         i = True
@@ -68,53 +38,77 @@ class Betano:
                 events_page = data['data']['blocks'][0]['events']
                 lastId = events_page[len(events_page) - 1]['id']
 
-                for event in events_page:
-                    newData = ''
-                    for market in event['markets']:
-                        if market['name'] == "Total de Gols Mais/Menos":
-                            for selection in market['selections']:
-                                if selection['name'] == 'Mais de 2.5':
-                                    odds_goals_over = selection['price']
-                                    newData = {
-                                        "id": event['id'],
-                                        "home_team": event['participants'][0]['name'],
-                                        "away_team": event['participants'][1]['name'],
-                                        "chave_jogo": (unidecode.unidecode(
-                                            event['participants'][0]['name'][:10] + '_X_' + event['participants'][1][
-                                                                                               'name'][
-                                                                                           :10])).replace(' ', '').replace('-', '').replace('.', ''),
-                                        "start_time": datetime.datetime.fromtimestamp(int(str(event['startTime'])[:-3])).strftime('%d/%m/%Y %H:%M'),
-                                        "odds_goals_over": odds_goals_over
-                                    }
-                        if newData != "":
-                            print("Betano:  " + newData['home_team'] + " x " + newData['away_team'])
-                        jogos.append(newData)
+                for event_page in events_page:
+                    jogos.append(event_page['url'])
+
             except:
                 i = False
 
         return jogos
 
-    def getSaldo(self):
-        print('Iniciando captura do saldo da Betano')
-        service = Service(ChromeDriverManager().install())
-        navegador = webdriver.Chrome(service=service)
-        navegador.get("https://br.betano.com/myaccount/login")
-        time.sleep(2)
-        navegador.find_element(By.XPATH, '//*[@id="username"]').send_keys("releandro15@gmail.com")
-        navegador.find_element(By.XPATH, '//*[@id="password"]').send_keys("10202233+ac")
-        navegador.find_element(By.XPATH, '//*[@id="app"]/div/main/div/section/div/form/button').click()
-        time.sleep(1)
-        saldo_betano = (navegador.find_element(By.XPATH, '//*[@id="js-main-balances-container"]/div[2]/div[1]/div[1]/label[2]').text).replace('R$', '')
-        print('O saldo disponível na Betano é '+saldo_betano)
-        navegador.quit()
-        return float(saldo_betano.replace('.', '').replace(',', '.'))
+    def montaJson(self, casa, fora, inicio, mercado, odds_betano):
+        inicio = datetime.datetime.fromtimestamp(int(str(inicio)[:-3])).strftime('%d/%m/%Y %H:%M')
+        return {
+            "casa": casa,
+            "fora": fora,
+            "chave": (unidecode.unidecode(casa+' x '+fora)),
+            "inicio": inicio,
+            "mercado": mercado,
+            "odds_betano": odds_betano
+        }
+
+    async def getDados(self, session, url):
+        try:
+            async with session.get(url) as resp:
+                data = await resp.json()
+                print(data['data']['event']['name'])
+                return (data['data']['event'])
+        except:
+            print('Erro Betano')
+
+    async def getCotacoes(self, jogos_betano):
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for jogo in jogos_betano:
+                url = 'https://br.betano.com/api'+jogo
+                tasks.append(asyncio.ensure_future(self.getDados(session, url)))
+
+            data = await asyncio.gather(*tasks)
+            return data
+
+    def filtraMercados(self, jogos_cotacoes):
+        jogos_filtrados = []
+        for jogo in jogos_cotacoes:
+            casa = jogo['participants'][0]['name']
+            fora = jogo['participants'][1]['name']
+            inicio = jogo['startTime']
+            mercados = jogo['markets']
+            for mercadox in mercados:
+                if mercadox['name'] == 'Total de Gols Mais/Menos':
+                    for selection in mercadox['selections']:
+                        mercado = 'Total Gols '+selection['name']
+                        odds_betano = selection['price']
+                        jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_betano))
+                if mercadox['name'] == 'Ambas equipes Marcam':
+                    for selection in mercadox['selections']:
+                        mercado = mercadox['name']+' '+selection['name']
+                        odds_betano = selection['price']
+                        jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_betano))
+                if mercadox['name'] == 'Total de gols Mais/Menos - 1° Tempo':
+                    for selection in mercadox['selections']:
+                        mercado = 'Total Gols 1T '+selection['name']
+                        odds_betano = selection['price']
+                        jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_betano))
+
+        return jogos_filtrados
+
 
 """
 dol = Betano()
-dol.getSaldo()
+cotacoes = asyncio.run(dol.getCotacoes(dol.getJogos()))
+filt = dol.filtraMercados(cotacoes)
 
 with open('data.json', 'w') as f:
-    json.dump(dol.getCotacoes(), f)
+    json.dump(filt, f)
 exit()
-
 """
