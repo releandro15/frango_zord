@@ -1,6 +1,5 @@
 import asyncio
 from datetime import datetime
-import time
 import dollar_ as dollar
 import betano_ as betano
 import pandas as pd
@@ -82,6 +81,10 @@ msg_log = '*FRANGO LOGs*\n'
 msg_log = f"{msg_log}*Inicio: *{start_time.strftime('%d/%m/%Y %H:%M:%S')}\n"
 msg_log = f"{msg_log}*Fim: *{end_time.strftime('%d/%m/%Y %H:%M:%S')}\n"
 msg_log = f"{msg_log}*Duração: *{format(end_time - start_time)}\n"
+msg_log = f"{msg_log}*Mercados Betano: *{str(len(cotacoes_betano))}\n"
+msg_log = f"{msg_log}*Mercados Dollar: *{str(len(cotacoes_dollar))}\n"
+msg_log = f"{msg_log}*Comum: *{str(len(m_tomail))}\n"
+msg_log = f"{msg_log}*>=1: *{str(len(filter_positive))}\n"
 url = f" https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id=-1001628925345&text={msg_log}&parse_mode=Markdown"
 requests.get(url)
 

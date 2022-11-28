@@ -1,19 +1,9 @@
 import asyncio
 import http.client
 import json
-
 import aiohttp
-import requests
 import unidecode
-from selenium import webdriver
-from sockshandler import merge_dict
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-import time
 from datetime import datetime, timedelta
-from collections import defaultdict
-import pandas as pd
 
 
 class Dollar:
