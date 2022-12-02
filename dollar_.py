@@ -4,6 +4,7 @@ import json
 import aiohttp
 import unidecode
 from datetime import datetime, timedelta
+import pandas as pd
 
 
 class Dollar:
@@ -86,8 +87,43 @@ class Dollar:
             odds_dollar = jogo['odds']['full_time']['both_teams_to_score_no']['value']
             jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
 
+            mercado = 'Chance Dupla 1X'
+            odds_dollar = jogo['odds']['full_time']['away']['value']
+            jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+
+            mercado = 'Chance Dupla X2'
+            odds_dollar = jogo['odds']['full_time']['home']['value']
+            jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+
+            mercado = 'Chance Dupla 12'
+            odds_dollar = jogo['odds']['full_time']['draw']['value']
+            jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_dollar))
+
 
         return jogos_filtrados
+
+    def normalizeDollar(self, pd_cotacoes_dollar):
+        print("Nomalizando nomes Dollar")
+        pd_normalize_teams = pd.read_excel(r'C:\Users\ran_l\OneDrive\Pessoal\Pense e Enriqueça\Cotações\Nomalize.xlsm',
+                                           sheet_name='Dollar')
+
+        # Novo método de normalização de nomes
+        m = pd.merge(pd_cotacoes_dollar, pd_normalize_teams, how='left', left_on=['casa'], right_on=['Dollar'])
+        for index_m, row_m in m.iterrows():
+            if pd.isna(row_m['Betano']):
+                m.iloc[index_m, m.columns.get_loc('Betano')] = row_m['casa']
+        m = m.drop(columns=['casa', 'Dollar', 'Confere']).rename(columns={'Betano': 'casa'})
+
+        m = pd.merge(m, pd_normalize_teams, how='left', left_on=['fora'], right_on=['Dollar'])
+        for index_m, row_m in m.iterrows():
+            if pd.isna(row_m['Betano']):
+                m.iloc[index_m, m.columns.get_loc('Betano')] = row_m['fora']
+        m = m.drop(columns=['fora', 'Dollar', 'Confere']).rename(columns={'Betano': 'fora'})
+
+        for index_m, row_m in m.iterrows():
+            m.iloc[index_m, m.columns.get_loc('chave')] = (unidecode.unidecode(row_m['casa'] + ' x ' + row_m['fora']))
+
+        return m[['casa', 'fora', 'chave', 'inicio', 'mercado', 'odds_dollar']]
 
 
 """dol = Dollar()

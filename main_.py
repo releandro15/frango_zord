@@ -4,7 +4,6 @@ import dollar_ as dollar
 import betano_ as betano
 import pandas as pd
 import requests
-import unidecode
 
 start_time = datetime.now()
 #Dados telegram
@@ -13,31 +12,11 @@ chat_id = "-1001845830961"
 
 cotacoes_betano = betano.Betano().filtraMercados(asyncio.run(betano.Betano().getCotacoes(betano.Betano().getJogos())))
 pd_cotacoes_betano = pd.json_normalize(cotacoes_betano)
+#pd_cotacoes_betano.to_excel("cotacoes_betano.xlsx")
 
 cotacoes_dollar = dollar.Dollar().filtraMercados(asyncio.run(dollar.Dollar().getCotacoes(dollar.Dollar().getJogos())))
-pd_cotacoes_dollar = pd.json_normalize(cotacoes_dollar)
-
-print("Nomalizando nomes Dollar")
-pd_normalize_teams = pd.read_excel(r'C:\Users\ran_l\OneDrive\Pessoal\Pense e Enriqueça\Cotações\Nomalize.xlsm', sheet_name='Dollar')
-
-#Novo método de normalização de nomes
-m = pd.merge(pd_cotacoes_dollar, pd_normalize_teams, how='left', left_on=['casa'], right_on=['Dollar'])
-for index_m, row_m in m.iterrows():
-    if pd.isna(row_m['Betano']):
-        m.iloc[index_m, m.columns.get_loc('Betano')] = row_m['casa']
-m = m.drop(columns=['casa', 'Dollar', 'Confere']).rename(columns={'Betano': 'casa'})
-
-m = pd.merge(m, pd_normalize_teams, how='left', left_on=['fora'], right_on=['Dollar'])
-for index_m, row_m in m.iterrows():
-    if pd.isna(row_m['Betano']):
-        m.iloc[index_m, m.columns.get_loc('Betano')] = row_m['fora']
-m = m.drop(columns=['fora', 'Dollar', 'Confere']).rename(columns={'Betano': 'fora'})
-
-for index_m, row_m in m.iterrows():
-    m.iloc[index_m, m.columns.get_loc('chave')] = (unidecode.unidecode(row_m['casa'] + ' x ' +row_m['fora']))
-
-pd_cotacoes_dollar = m[['casa', 'fora', 'chave', 'inicio', 'mercado', 'odds_dollar']]
-
+pd_cotacoes_dollar = dollar.Dollar().normalizeDollar(pd.json_normalize(cotacoes_dollar))
+#pd_cotacoes_dollar.to_excel("cotacoes_dollar.xlsx")
 
 m = pd.merge(pd_cotacoes_betano, pd_cotacoes_dollar, how='inner', on=['chave', 'mercado'])
 
@@ -49,6 +28,8 @@ m['retorno_percentual'] = (m['aposta_betano']*m['odds_betano'])-100
 m_tomail = m[['casa_x', 'fora_x', 'chave', 'inicio_x', 'mercado', 'odds_betano', 'odds_dollar', 'aposta_betano', 'aposta_dollar', 'retorno_percentual']]
 filter_positive = m_tomail[(m_tomail['retorno_percentual'] >= 1)]
 m_tomail = m_tomail.sort_values(by=['retorno_percentual'], ascending=False)
+
+#m_tomail.to_excel("comuns.xlsx")
 
 
 print("Enviando resultados no Telegram")
@@ -75,6 +56,7 @@ if (len(filter_positive.index)>0):
             f.write(chave_msg)
             f.close()
 
+print("Enviando logs no Telegram")
 end_time = datetime.now()
 msg_log = ''
 msg_log = '*FRANGO LOGs*\n'

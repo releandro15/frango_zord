@@ -60,8 +60,13 @@ class Betano:
         try:
             async with session.get(url) as resp:
                 data = await resp.json()
-                print(data['data']['event']['name'])
-                return (data['data']['event'])
+                qtd_mkts = len(data['data']['markets'])
+                maior = 0
+                url = url+'?bt='+str(qtd_mkts)
+                async with session.get(url) as resp:
+                    data = await resp.json()
+                    print(data['data']['event']['name'])
+                    return (data['data']['event'])
         except:
             print('Erro Betano')
 
@@ -96,6 +101,11 @@ class Betano:
                 if mercadox['name'] == 'Total de gols Mais/Menos - 1° Tempo':
                     for selection in mercadox['selections']:
                         mercado = 'Total Gols 1T '+selection['name']
+                        odds_betano = selection['price']
+                        jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_betano))
+                if mercadox['name'] == 'Chance Dupla':
+                    for selection in mercadox['selections']:
+                        mercado = 'Chance Dupla '+selection['name']
                         odds_betano = selection['price']
                         jogos_filtrados.append(self.montaJson(casa, fora, inicio, mercado, odds_betano))
 
