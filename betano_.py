@@ -58,7 +58,7 @@ class Betano:
 
     async def getDados(self, session, url):
         try:
-            async with session.get(url, timeout=1) as resp:
+            async with session.get(url) as resp:
                 data = await resp.json()
                 qtd_mkts = len(data['data']['markets'])
                 maior = 0
