@@ -2187,3 +2187,8 @@ APEJES Academy x Fauve Azur Elite|20/02/2023 11:00|8.11;
 APEJES Academy x Fauve Azur Elite|20/02/2023 11:00|9.2;
 Al Gharafa x Al Shamal|20/02/2023 09:45|3.68;
 Armed Forces x Steve Biko|20/02/2023 12:00|3.71;
+Armed Forces x Steve Biko|20/02/2023 12:00|8.27;
+Maccabi Tel Aviv x Hapoel Beer Sheva|20/02/2023 14:30|1.23;
+Maghreb Association Sportive de Fes x Ocs Olympique de Safi|21/02/2023 11:00|0.09;
+Hemel Hempstead Town x Chippenham Town|21/02/2023 15:45|2.72;
+Hemel Hempstead Town x Chippenham Town|21/02/2023 15:45|0.18;

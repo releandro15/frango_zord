@@ -104,7 +104,7 @@ class Dollar:
 
     def normalizeDollar(self, pd_cotacoes_dollar):
         print("Nomalizando nomes Dollar")
-        pd_normalize_teams = pd.read_excel(r'C:\Users\ran_l\OneDrive\Pessoal\Pense e Enriqueça\Cotações\newNomalize.xlsx',
+        pd_normalize_teams = pd.read_excel(r'normalize\newNomalize.xlsx',
                                            sheet_name='Dollar')
 
         # Novo método de normalização de nomes
